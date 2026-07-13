@@ -9,23 +9,52 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-API_KEY = "csk-yjr8nkkyw9rnx23vmhhkdd5x8n9nf4dpchdypv5rmrnhxm6x"
-API_URL = "https://api.cerebras.ai/v1/chat/completions"
-VISION_MODEL = "gemma-4-31b"
-TEXT_MODEL = "gemma-4-31b"
+# Provider config - auto-detect based on available keys
+def get_config():
+    fireworks_key = os.getenv("FIREWORKS_API_KEY")
+    cerebras_key = os.getenv("CEREBRAS_API_KEY")
+    
+    if fireworks_key:
+        return {
+            "api_key": fireworks_key,
+            "api_url": "https://api.fireworks.ai/inference/v1/chat/completions",
+            "vision_model": "accounts/fireworks/models/gemma-4-31b-it",
+            "text_model": "accounts/fireworks/models/gemma-4-31b-it",
+            "name": "Fireworks (Gemma 4 31B)"
+        }
+    elif cerebras_key:
+        return {
+            "api_key": cerebras_key,
+            "api_url": "https://api.cerebras.ai/v1/chat/completions",
+            "vision_model": "gemma-4-31b",
+            "text_model": "gemma-4-31b",
+            "name": "Cerebras (Gemma 4 31B)"
+        }
+    else:
+        print("ERROR: No API key found. Set FIREWORKS_API_KEY or CEREBRAS_API_KEY")
+        sys.exit(1)
 
-def call_api(messages, model=TEXT_MODEL, max_tokens=300):
-    headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
+config = get_config()
+
+def call_api(messages, model=None, max_tokens=300):
+    if model is None:
+        model = config["text_model"]
+    headers = {"Authorization": f"Bearer {config['api_key']}", "Content-Type": "application/json"}
     data = {"model": model, "messages": messages, "max_tokens": max_tokens}
-    for attempt in range(3):
+    for attempt in range(5):
         try:
-            r = requests.post(API_URL, headers=headers, json=data, timeout=60)
+            r = requests.post(config["api_url"], headers=headers, json=data, timeout=60)
             resp = r.json()
+            if r.status_code == 429:
+                wait = min(30, 2 ** attempt)
+                print(f"    Rate limited, waiting {wait}s...")
+                time.sleep(wait)
+                continue
             if "choices" in resp and resp["choices"][0]["message"]["content"]:
                 return resp["choices"][0]["message"]["content"].strip()
-        except:
-            pass
-        time.sleep(1)
+        except Exception as e:
+            print(f"    Retry {attempt+1}: {e}")
+        time.sleep(2)
     return ""
 
 def get_video_duration(video_path):
@@ -68,7 +97,7 @@ def analyze_frame(frame_path, frame_name):
             {"type": "text", "text": f"Describe this video frame in detail. What objects, colors, setting, people, actions, and mood do you see? Be specific. Frame: {frame_name}"},
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}}
         ]
-    }, {"role": "assistant", "content": ""}], model=VISION_MODEL, max_tokens=200)
+    }, {"role": "assistant", "content": ""}], model=config["vision_model"], max_tokens=200)
     return response
 
 def compare_frames(desc1, desc2):
@@ -95,22 +124,41 @@ def create_thinking_board(frames, descriptions, comparisons):
         board += f"[{frame['name']}]: {desc[:200]}\n"
     return board
 
+STYLE_PROMPTS = {
+    "formal": "Write a formal, professional 2-sentence caption describing this scene.",
+    "sarcastic": "Write a sarcastic 2-sentence caption about this scene with dry humor.",
+    "humorous_tech": "Write a funny 2-sentence caption using developer/tech metaphors.",
+    "humorous_nontech": "Write a funny 2-sentence caption for anyone using everyday humor.",
+}
+
 def generate_captions(thinking_board):
     captions = {}
     for style, prompt in STYLE_PROMPTS.items():
         print(f"  {style}...")
-        response = call_api([{
-            "role": "user",
-            "content": f"{prompt}\n\nScene analysis:\n{thinking_board}"
-        }], max_tokens=200)
-        captions[style] = response if response else ""
-        print(f"    {captions[style][:80]}...")
+        for attempt in range(3):
+            response = call_api([{
+                "role": "user",
+                "content": f"{prompt}\n\nScene description:\n{thinking_board[:1500]}"
+            }], max_tokens=200)
+            if response and len(response) > 20:
+                captions[style] = response
+                print(f"    {response[:80]}...")
+                break
+            time.sleep(1)
+        else:
+            # Fallback: use simpler prompt
+            response = call_api([{
+                "role": "user",
+                "content": f"Write a {style} caption about: {thinking_board[:500]}"
+            }], max_tokens=200)
+            captions[style] = response if response else f"[{style}] Scene analysis available in thinking board."
+            print(f"    Fallback: {captions[style][:80]}...")
     return captions
 
 def score_caption(caption, style, thinking_board):
     response = call_api([{
         "role": "user",
-        "content": f"Rate this caption 1-10 for how well it matches the {style} style and accurately describes the video scene.\n\nCaption: {caption}\n\nScene: {thinking_board[:500]}\n\nOutput ONLY a number."
+        "content": f"Rate this caption 1-10 for {style} style quality. Output ONLY a number.\n\nCaption: {caption[:300]}"
     }], max_tokens=5)
     try:
         return int(''.join(filter(str.isdigit, response[:3])))
@@ -121,20 +169,14 @@ def rewrite_caption(caption, style, thinking_board):
     prompt = STYLE_PROMPTS[style]
     response = call_api([{
         "role": "user",
-        "content": f"Rewrite this caption to better match the {style} style. Keep it accurate to the scene.\n\nOriginal: {caption}\n\nScene: {thinking_board[:500]}\n\n{prompt}"
+        "content": f"Rewrite this caption to be better.\n\nOriginal: {caption}\n\nScene: {thinking_board[:500]}\n\n{prompt}"
     }], max_tokens=200)
-    return response if response else caption
-
-STYLE_PROMPTS = {
-    "formal": "Rewrite as a formal, professional caption describing the visual scene. Be descriptive and factual. Max 2 sentences.",
-    "sarcastic": "Rewrite as a sarcastic, witty caption about the visual scene. Use dry humor. Max 2 sentences.",
-    "humorous_tech": "Rewrite as a humorous caption for developers using tech metaphors. Max 2 sentences.",
-    "humorous_nontech": "Rewrite as a funny caption for anyone. Use everyday humor. Max 2 sentences.",
-}
+    return response if response and len(response) > 20 else caption
 
 def process_video(video_path):
     print(f"\n{'='*60}")
     print(f"Processing: {os.path.basename(video_path)}")
+    print(f"Provider: {config['name']}")
     print(f"{'='*60}")
     
     start = time.time()

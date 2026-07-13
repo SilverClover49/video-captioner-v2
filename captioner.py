@@ -11,16 +11,21 @@ load_dotenv()
 
 API_KEY = "csk-yjr8nkkyw9rnx23vmhhkdd5x8n9nf4dpchdypv5rmrnhxm6x"
 API_URL = "https://api.cerebras.ai/v1/chat/completions"
-VISION_MODEL = "gemma-4-31b-it"
-TEXT_MODEL = "gemma-4-31b-it"
+VISION_MODEL = "gemma-4-31b"
+TEXT_MODEL = "gemma-4-31b"
 
 def call_api(messages, model=TEXT_MODEL, max_tokens=300):
     headers = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"}
     data = {"model": model, "messages": messages, "max_tokens": max_tokens}
-    r = requests.post(API_URL, headers=headers, json=data, timeout=60)
-    resp = r.json()
-    if "choices" in resp:
-        return resp["choices"][0]["message"]["content"].strip()
+    for attempt in range(3):
+        try:
+            r = requests.post(API_URL, headers=headers, json=data, timeout=60)
+            resp = r.json()
+            if "choices" in resp and resp["choices"][0]["message"]["content"]:
+                return resp["choices"][0]["message"]["content"].strip()
+        except:
+            pass
+        time.sleep(1)
     return ""
 
 def get_video_duration(video_path):
@@ -90,13 +95,6 @@ def create_thinking_board(frames, descriptions, comparisons):
         board += f"[{frame['name']}]: {desc[:200]}\n"
     return board
 
-STYLE_PROMPTS = {
-    "formal": "Rewrite as a formal, professional caption describing the visual scene. Be descriptive and factual. Max 2 sentences.",
-    "sarcastic": "Rewrite as a sarcastic, witty caption about the visual scene. Use dry humor. Max 2 sentences.",
-    "humorous_tech": "Rewrite as a humorous caption for developers using tech metaphors. Max 2 sentences.",
-    "humorous_nontech": "Rewrite as a funny caption for anyone. Use everyday humor. Max 2 sentences.",
-}
-
 def generate_captions(thinking_board):
     captions = {}
     for style, prompt in STYLE_PROMPTS.items():
@@ -105,9 +103,34 @@ def generate_captions(thinking_board):
             "role": "user",
             "content": f"{prompt}\n\nScene analysis:\n{thinking_board}"
         }], max_tokens=200)
-        captions[style] = response
-        print(f"    {response[:80]}...")
+        captions[style] = response if response else ""
+        print(f"    {captions[style][:80]}...")
     return captions
+
+def score_caption(caption, style, thinking_board):
+    response = call_api([{
+        "role": "user",
+        "content": f"Rate this caption 1-10 for how well it matches the {style} style and accurately describes the video scene.\n\nCaption: {caption}\n\nScene: {thinking_board[:500]}\n\nOutput ONLY a number."
+    }], max_tokens=5)
+    try:
+        return int(''.join(filter(str.isdigit, response[:3])))
+    except:
+        return 5
+
+def rewrite_caption(caption, style, thinking_board):
+    prompt = STYLE_PROMPTS[style]
+    response = call_api([{
+        "role": "user",
+        "content": f"Rewrite this caption to better match the {style} style. Keep it accurate to the scene.\n\nOriginal: {caption}\n\nScene: {thinking_board[:500]}\n\n{prompt}"
+    }], max_tokens=200)
+    return response if response else caption
+
+STYLE_PROMPTS = {
+    "formal": "Rewrite as a formal, professional caption describing the visual scene. Be descriptive and factual. Max 2 sentences.",
+    "sarcastic": "Rewrite as a sarcastic, witty caption about the visual scene. Use dry humor. Max 2 sentences.",
+    "humorous_tech": "Rewrite as a humorous caption for developers using tech metaphors. Max 2 sentences.",
+    "humorous_nontech": "Rewrite as a funny caption for anyone. Use everyday humor. Max 2 sentences.",
+}
 
 def process_video(video_path):
     print(f"\n{'='*60}")
@@ -116,8 +139,10 @@ def process_video(video_path):
     
     start = time.time()
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    frames_dir = os.path.join(base_dir, "frames")
-    thinking_file = os.path.join(base_dir, "thinking_board.md")
+    video_name = os.path.splitext(os.path.basename(video_path))[0]
+    
+    frames_dir = os.path.join(base_dir, "frames", video_name)
+    thinking_file = os.path.join(base_dir, f"thinking_board_{video_name}.md")
     
     print("\n[STAGE 1] Extracting frames...")
     frames = extract_frames(video_path, frames_dir)
@@ -145,6 +170,16 @@ def process_video(video_path):
     print("\n[STAGE 4] Generating captions...")
     captions = generate_captions(thinking_board)
     
+    print("\n[STAGE 5] Scoring and verifying...")
+    for style in list(captions.keys()):
+        score = score_caption(captions[style], style, thinking_board)
+        print(f"  {style}: {score}/10")
+        if score < 8:
+            print(f"  Rewriting {style}...")
+            captions[style] = rewrite_caption(captions[style], style, thinking_board)
+            new_score = score_caption(captions[style], style, thinking_board)
+            print(f"  {style} improved: {new_score}/10")
+    
     elapsed = round(time.time() - start, 1)
     print(f"\n  Done in {elapsed}s")
     
@@ -153,6 +188,7 @@ def process_video(video_path):
         "duration": get_video_duration(video_path),
         "frames": len(frames),
         "captions": captions,
+        "thinking_board": thinking_file,
         "processing_time": elapsed
     }
 

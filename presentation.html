@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Captioner - AMD Hackathon</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; color: #fff; }
+        .slide { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; padding: 80px 120px; position: relative; }
+        .dark { background: linear-gradient(135deg, rgba(8,12,24,0.95) 0%, rgba(8,12,24,0.85) 100%), url('design/background_dark.png'); background-size: cover; }
+        .accent { background: linear-gradient(135deg, rgba(10,10,15,0.95) 0%, rgba(10,10,15,0.85) 100%), url('design/background_accent.png'); background-size: cover; }
+        h1 { font-size: 4em; font-weight: 800; margin-bottom: 24px; background: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        h2 { font-size: 2.8em; font-weight: 700; margin-bottom: 32px; }
+        h3 { font-size: 1.6em; font-weight: 600; margin-bottom: 16px; color: #888; }
+        .subtitle { font-size: 1.5em; color: #888; margin-bottom: 40px; }
+        p, li { font-size: 1.3em; line-height: 1.8; color: #ccc; }
+        .highlight { color: #00d4ff; font-weight: 600; }
+        .red { color: #ff4444; }
+        .green { color: #44ff44; }
+        .code { background: rgba(0,0,0,0.5); border: 1px solid #333; padding: 24px; border-radius: 12px; font-family: monospace; font-size: 1.1em; margin: 20px 0; }
+        .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start; }
+        .stat-box { text-align: center; padding: 40px; background: rgba(0,0,0,0.4); border-radius: 16px; border: 1px solid #333; }
+        .stat-number { font-size: 4.5em; font-weight: 800; background: linear-gradient(135deg, #00d4ff 0%, #00ff88 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; line-height: 1; }
+        .stat-label { font-size: 1.1em; color: #888; margin-top: 12px; }
+        .pipeline { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 40px 0; justify-content: center; }
+        .pipeline-step { background: rgba(0,0,0,0.5); padding: 20px 28px; border-radius: 12px; border: 1px solid #333; text-align: center; }
+        .pipeline-step .stage { font-size: 0.8em; color: #00d4ff; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
+        .pipeline-step .name { font-size: 1.1em; font-weight: 600; }
+        .pipeline-arrow { color: #00d4ff; font-size: 1.8em; }
+        .quote { font-style: italic; font-size: 1.5em; color: #666; border-left: 4px solid #00d4ff; padding-left: 24px; margin: 40px 0; }
+        ul { list-style: none; padding-left: 0; }
+        ul li { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        ul li:before { content: "→ "; color: #00d4ff; font-weight: bold; }
+        .badge { display: inline-block; padding: 8px 20px; background: rgba(0, 212, 255, 0.15); color: #00d4ff; border-radius: 24px; font-size: 0.95em; font-weight: 500; margin-bottom: 24px; }
+        .slide-number { position: absolute; top: 40px; right: 60px; font-size: 0.9em; color: #444; }
+    </style>
+</head>
+<body>
+
+<div class="slide accent" style="text-align: center; justify-content: center; align-items: center;">
+    <div class="badge">AMD Developer Hackathon: ACT II</div>
+    <h1>Video Captioner</h1>
+    <p class="subtitle">Vision-Based AI Pipeline for Silent Video Captioning</p>
+    <p style="color: #666;">Track 2: Video Captioning | Gemma 4 31B | 100% Vision-Based</p>
+    <div class="slide-number">01</div>
+</div>
+
+<div class="slide dark">
+    <h2>The Problem</h2>
+    <div class="quote">"Most captioning tools rely on audio. But what about silent videos?"</div>
+    <br>
+    <ul>
+        <li>Audio-based pipelines <span class="red">fail completely</span> on silent videos</li>
+        <li>No visual understanding of the scene</li>
+        <li>Can't describe objects, colors, setting, or mood</li>
+        <li>Track 2 requires describing what's <span class="highlight">IN</span> the video, not what's said</li>
+    </ul>
+    <div class="slide-number">02</div>
+</div>
+
+<div class="slide dark">
+    <h2>Our Solution: 5-Stage Vision Pipeline</h2>
+    <div class="pipeline">
+        <div class="pipeline-step"><div class="stage">Stage 1</div><div class="name">Frame Extraction</div></div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step"><div class="stage">Stage 2</div><div class="name">Vision Analysis</div></div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step"><div class="stage">Stage 3</div><div class="name">Frame Comparison</div></div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step"><div class="stage">Stage 4</div><div class="name">Thinking Board</div></div>
+        <div class="pipeline-arrow">→</div>
+        <div class="pipeline-step"><div class="stage">Stage 5</div><div class="name">Caption + Verify</div></div>
+    </div>
+    <br>
+    <div class="two-col">
+        <div>
+            <h3>Key Innovation</h3>
+            <ul>
+                <li>Adaptive frame count (9-15 based on duration)</li>
+                <li>Gemma 4 31B vision analysis</li>
+                <li>Frame-to-frame comparison</li>
+                <li>Per-video thinking board</li>
+            </ul>
+        </div>
+        <div>
+            <h3>Quality Assurance</h3>
+            <ul>
+                <li>Auto-scoring (1-10 per caption)</li>
+                <li>Re-generation for scores below 8</li>
+                <li>Style-specific verification</li>
+                <li>Complete output guarantee</li>
+            </ul>
+        </div>
+    </div>
+    <div class="slide-number">03</div>
+</div>
+
+<div class="slide accent">
+    <h2>Live Demo: Frame Analysis</h2>
+    <div class="code">
+        <span class="highlight">Frame F01 (0.0s):</span> "A wide-angle shot of a multi-lane city road in Korea, lined with vibrant yellow ginkgo trees during autumn..."<br><br>
+        <span class="highlight">Frame F05 (3.0s):</span> "A high-angle view of a bustling urban boulevard with golden autumn foliage and traffic flowing through the city..."<br><br>
+        <span class="highlight">Comparison:</span> F01 → F05: DIFFERENT (scene progression detected)
+    </div>
+    <p>Each frame is analyzed independently, then compared to detect scene changes.</p>
+    <div class="slide-number">04</div>
+</div>
+
+<div class="slide dark">
+    <h2>Results</h2>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin: 40px 0;">
+        <div class="stat-box">
+            <div class="stat-number">6/6</div>
+            <div class="stat-label">Videos Processed</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">4</div>
+            <div class="stat-label">Caption Styles</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">97s</div>
+            <div class="stat-label">Avg Processing</div>
+        </div>
+        <div class="stat-box">
+            <div class="stat-number">8+</div>
+            <div class="stat-label">Min Score</div>
+        </div>
+    </div>
+    <div class="slide-number">05</div>
+</div>
+
+<div class="slide accent">
+    <h2>Example Output</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        <div class="code">
+            <span class="highlight">Formal:</span><br>
+            "A wide-angle shot captures a city street lined with vibrant yellow ginkgo trees during autumn. Several vehicles navigate the roadway."
+        </div>
+        <div class="code">
+            <span class="highlight">Sarcastic:</span><br>
+            "Nothing says 'serene autumn getaway' quite like a multi-lane traffic jam in front of concrete apartments."
+        </div>
+        <div class="code">
+            <span class="highlight">Humorous-Tech:</span><br>
+            "Just a high-traffic production environment with legacy bottlenecks. Trying to optimize the commute pipeline."
+        </div>
+        <div class="code">
+            <span class="highlight">Humorous-NonTech:</span><br>
+            "The view is a 10/10, but the traffic is a 0/10. Just me and 5,000 other people trying to get home."
+        </div>
+    </div>
+    <div class="slide-number">06</div>
+</div>
+
+<div class="slide dark">
+    <h2>Technology Stack</h2>
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin: 40px 0;">
+        <div>
+            <h3 style="color: #00d4ff;">Vision</h3>
+            <ul>
+                <li>Gemma 4 31B</li>
+                <li>Cerebras API</li>
+                <li>Frame-by-frame analysis</li>
+            </ul>
+        </div>
+        <div>
+            <h3 style="color: #00ff88;">Processing</h3>
+            <ul>
+                <li>FFmpeg frame extraction</li>
+                <li>Adaptive frame count</li>
+                <li>Scene change detection</li>
+            </ul>
+        </div>
+        <div>
+            <h3 style="color: #ffaa00;">Quality</h3>
+            <ul>
+                <li>Auto-scoring (1-10)</li>
+                <li>Re-generation pipeline</li>
+                <li>Style verification</li>
+            </ul>
+        </div>
+    </div>
+    <div class="slide-number">07</div>
+</div>
+
+<div class="slide accent" style="text-align: center; justify-content: center; align-items: center;">
+    <h2>Built for AMD Developer Hackathon: ACT II</h2>
+    <p class="subtitle">Track 2: Video Captioning</p>
+    <div style="margin: 40px 0;">
+        <p><span class="highlight">GitHub:</span> github.com/SilverClover49/video-captioner-v2</p>
+        <p><span class="highlight">Docker:</span> ghcr.io/silverclover49/video-captioner-v2:latest</p>
+    </div>
+    <div class="slide-number">08</div>
+</div>
+
+</body>
+</html>
